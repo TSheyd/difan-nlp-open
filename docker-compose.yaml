@@ -1,0 +1,96 @@
+version: "3.11"
+
+services:
+
+  difan_backend:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile
+    image: difan_backend
+    container_name: difan_backend
+    restart: always
+    environment:
+      DAGSTER_POSTGRES_USER: "postgres_user"
+      DAGSTER_POSTGRES_PASSWORD: "postgres_password"
+      DAGSTER_POSTGRES_DB: "postgres_db"
+      DAGSTER_CURRENT_IMAGE: "difan_backend"
+    ports: # gRPC
+        - "127.0.0.1:4000:4000"
+    networks:
+      - docker_default_network
+    volumes:  # pass config to container. !!! Mount single file as FILE (config.toml -> config.toml), or gRPC goes crazy
+      - ./config.toml:/opt/dagster/app/config.toml
+
+  # This service runs dagster-webserver, which loads your user code from the user code container.
+  # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
+  # a queue and later dequeued and launched by dagster-daemon.
+  dagster_webserver:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile_dagster
+    entrypoint:
+      - dagster-webserver
+      - -h
+      - "0.0.0.0"
+      - -p
+      - "3000"
+      - -w
+      - workspace.yaml
+      - -l
+      - /dagster
+    container_name: dagster_webserver
+    ports:  # port 3000 of host machine maps to 3000 in container. not exposed to outside - will be picked up by rproxy
+      - "127.0.0.1:3000:3000"
+    environment:
+      DAGSTER_POSTGRES_USER: "postgres_user"
+      DAGSTER_POSTGRES_PASSWORD: "postgres_password"
+      DAGSTER_POSTGRES_DB: "postgres_db"
+    volumes: # Make docker client accessible so we can terminate containers from the webserver
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/io_manager_storage:/tmp/io_manager_storage
+    networks:
+      - docker_default_network
+    depends_on:
+      - docker_postgresql
+      - difan_backend
+
+  # This service runs the dagster-daemon process, which is responsible for taking runs
+  # off of the queue and launching them, as well as creating runs from schedules or sensors.
+  dagster_daemon:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile_dagster
+    entrypoint:
+      - dagster-daemon
+      - run
+    container_name: dagster_daemon
+    restart: on-failure
+    environment:
+      DAGSTER_POSTGRES_USER: "postgres_user"
+      DAGSTER_POSTGRES_PASSWORD: "postgres_password"
+      DAGSTER_POSTGRES_DB: "postgres_db"
+    volumes: # Make docker client accessible, so we can launch containers using host docker
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/io_manager_storage:/tmp/io_manager_storage
+    networks:
+      - docker_default_network
+    depends_on:
+      - docker_postgresql
+      - difan_backend
+
+  # This service runs the postgres DB used by dagster for run storage, schedule storage,
+  # and event log storage.
+  docker_postgresql:
+    image: postgres:11
+    container_name: docker_postgresql
+    environment:
+      POSTGRES_USER: "postgres_user"
+      POSTGRES_PASSWORD: "postgres_password"
+      POSTGRES_DB: "postgres_db"
+    networks:
+      - docker_default_network
+
+networks:
+  docker_default_network:
+    driver: bridge
+    name: docker_default_network

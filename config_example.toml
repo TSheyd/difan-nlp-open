@@ -1,0 +1,17 @@
+# DB connections
+[database]
+server = ''
+login = ''
+password = ''
+
+[HSE]
+server = ''
+login = ''
+password = ''
+
+# data sources
+[financialmodelingprep]
+api_key = ''
+
+[EODHD]
+api_key = ''

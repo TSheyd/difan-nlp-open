@@ -12,7 +12,7 @@ from mysql.connector import connect
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
 
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from dagster import asset, AssetIn, get_dagster_logger
 from span_marker import SpanMarkerModel
 
@@ -21,7 +21,7 @@ from config import *
 
 
 model_name = "mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis"
-ner_model_name = "Universal-NER/UniNER-7B-all"
+ner_model_name = "lxyuan/span-marker-bert-base-multilingual-uncased-multinerd"
 
 
 logger = get_dagster_logger()
@@ -49,7 +49,7 @@ def ner_model():
     Load huggingface model for NER
     :return:
     """
-    ner_model = AutoModelForCausalLM.from_pretrained(ner_model_name)
+    ner_model = SpanMarkerModel.from_pretrained(ner_model_name)
     return ner_model
 
 
